@@ -14,9 +14,8 @@ namespace todot
     {
         static void Main(string[] args)
         {
-            IEnumerable<string> folderContent = Directory.GetFiles("../../../../arena/Logic").Where(file => file.EndsWith(".cs"));
             StringBuilder builder = new StringBuilder();
-            foreach (string filename in folderContent) {
+            foreach (string filename in args) {
                 builder.Append(File.ReadAllText(filename));
             }
             string sourceCode = builder.ToString();
@@ -32,67 +31,38 @@ namespace todot
             List<IRelationship> relations = extractor.GetAssociations(root).ToList();
             relations.AddRange(extractor.GetInheritances(root));
 
-            List<INode> nodes = CreateNodes(relations).ToList();
-
+            List<INode> nodes = extractor.GetClasses(root).ToList();
+            nodes.AddRange(extractor.GetStructs(root));
+            nodes.AddRange(extractor.GetInterfaces(root));
 
             Console.WriteLine("digraph D {");
 
             foreach (INode node in nodes) {
                 if (node is Class clss) {
-                    Console.WriteLine($"{clss.Name} [style=filled color=\"#333333\"]");
+                    Console.WriteLine($"\"{clss.Name}\" [style=filled color=\"#ffff77\"]");
                 } else if (node is Interface ntrfc) {
-                    Console.WriteLine($"{ntrfc.Name} [style=filled color=\"#aaaaaa\"]");
+                    Console.WriteLine($"\"{ntrfc.Name}\" [style=filled color=\"#aaaaaa\"]");
+                } else if (node is Struct strct) {
+                    Console.WriteLine($"\"{strct.Name}\" [style=filled color=\"#ddddaa\"]");
                 }
             }
 
+            List<string> nodeNames = nodes.Select(node => node.Name).ToList();
             foreach (IRelationship relation in relations) {
+
+                if ((!nodeNames.Contains(relation.Parent)) || (!nodeNames.Contains(relation.Child))) { continue; }
+
                 if (relation is ImplementationRelationship implementation) {
-                    Console.WriteLine($"{relation.Parent} -> {relation.Child} [arrowType=empty]");
+                    Console.WriteLine($"\"{relation.Child}\" -> \"{relation.Parent}\" [arrowhead=onormal]");
                 } else if (relation is InheritanceRelationship inheritance) {
-                    Console.WriteLine($"{relation.Parent} -> {relation.Child} [arrowType=empty]");
+                    Console.WriteLine($"\"{relation.Child}\" -> \"{relation.Parent}\" [arrowhead=onormal]");
                 } else if (relation is AssociationRelationship association) {
-                    Console.WriteLine($"{relation.Parent} -> {relation.Child}");
+                    Console.WriteLine($"\"{relation.Parent}\" -> \"{relation.Child}\"");
                 }
             }
 
 
             Console.WriteLine("}");
-        }
-
-        interface INode
-        {
-            string Name { get; }
-        }
-
-        class Node : INode
-        {
-            public string Name { get; set; }
-            public bool Equals(INode node) => node.Name == Name;
-        }
-
-        class Interface : Node
-        {
-            public Interface(string name) => Name = name;
-        }
-
-        class Class : Node
-        {
-            public Class(string name) => Name = name;
-        }
-
-        private static IEnumerable<INode> CreateNodes(List<IRelationship> relations) => CreateAllNodes(relations).Distinct();
-
-        private static IEnumerable<INode> CreateAllNodes(List<IRelationship> relations)
-        {
-            foreach (IRelationship relation in relations) {
-                if (relation is InheritanceRelationship inheritance) {
-                    yield return new Class(inheritance.Child);
-                    yield return new Class(inheritance.Parent);
-                } else if (relation is ImplementationRelationship implementation) {
-                    yield return new Class(implementation.Child);
-                    yield return new Interface(implementation.Parent);
-                } else if (relation is AssociationRelationship association) { }
-            }
         }
     }
 }

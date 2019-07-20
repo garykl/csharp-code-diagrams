@@ -7,6 +7,38 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Prototypes.RoslynAnalyzer
 {
+    
+    public interface INode
+    {
+        string Name { get; }
+    }
+
+    public class Node : INode
+    {
+        public string Name { get; set; }
+        public bool Equals(INode node) => node.Name == Name;
+    }
+
+    public class Interface : Node
+    {
+        public Interface(string name) => Name = name;
+    }
+
+    public class Class : Node
+    {
+        public Class(string name) => Name = name;
+    }
+
+    public class Struct : Node
+    {
+        public Struct(string name) => Name = name;
+    }
+
+    public class UnknownNode : Node
+    {
+        public UnknownNode(string name) => Name = name;
+    }
+
     public interface IRelationship
     {
         string Parent { get; set; }
@@ -39,13 +71,28 @@ namespace Prototypes.RoslynAnalyzer
             _model = model;
         }
 
+        public IEnumerable<INode> GetClasses(SyntaxNode node)
+          => GetAll<ClassDeclarationSyntax>(node)
+                .Select(declaration => new Class(declaration.Identifier.ValueText));
+
+        public IEnumerable<INode> GetStructs(SyntaxNode node)
+          => GetAll<StructDeclarationSyntax>(node)
+                .Select(declaration => new Struct(declaration.Identifier.ValueText));
+
+        public IEnumerable<INode> GetInterfaces(SyntaxNode node)
+          => GetAll<InterfaceDeclarationSyntax>(node)
+                .Select(declaration => new Interface(declaration.Identifier.ValueText));
+
+        public IEnumerable<TDescendent> GetAll<TDescendent>(SyntaxNode node)
+          => node.DescendantNodes().OfType<TDescendent>();
+
         public IEnumerable<IRelationship> GetAssociations(SyntaxNode node) => GetAllAssociations(node).Distinct();
 
         private IEnumerable<IRelationship> GetAllAssociations(SyntaxNode node)
         {
-            var classes = node.DescendantNodes().OfType<ClassDeclarationSyntax>();
+            var classes = node.DescendantNodes().OfType<TypeDeclarationSyntax>();
 
-            foreach (ClassDeclarationSyntax declaration in classes) {
+            foreach (TypeDeclarationSyntax declaration in classes) {
 
                 string parentName = declaration.Identifier.ValueText;
 
@@ -99,9 +146,9 @@ namespace Prototypes.RoslynAnalyzer
 
         public IEnumerable<IRelationship> GetInheritances(SyntaxNode node)
         {
-            var classes = node.DescendantNodes().OfType<ClassDeclarationSyntax>();
+            var classes = node.DescendantNodes().OfType<TypeDeclarationSyntax>();
 
-            foreach (ClassDeclarationSyntax declaration in classes) {
+            foreach (TypeDeclarationSyntax declaration in classes) {
                 INamedTypeSymbol symbol = _model.GetDeclaredSymbol(declaration);
 
                 foreach (INamedTypeSymbol interfaceSymbol in symbol.Interfaces) {
@@ -111,12 +158,14 @@ namespace Prototypes.RoslynAnalyzer
                     };
                 }
 
-                string parentName = symbol.BaseType.Name;
-                if (parentName != "Object") {
-                    yield return (IRelationship) new InheritanceRelationship {
-                        Child = declaration.Identifier.ValueText,
-                        Parent = parentName
-                    };
+                if (declaration is ClassDeclarationSyntax classDeclaration) {
+                    string parentName = symbol.BaseType.Name;
+                    if (parentName != "Object") {
+                        yield return (IRelationship) new InheritanceRelationship {
+                            Child = declaration.Identifier.ValueText,
+                            Parent = parentName
+                        };
+                    }
                 }
             }
         }

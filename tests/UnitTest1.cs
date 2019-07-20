@@ -59,7 +59,7 @@ namespace roslynqueries
             var extractor = new Extractor(text, model);
             var root = (CompilationUnitSyntax)tree.GetRoot();
 
-            IEnumerable<AssociationRelationship> relations = extractor.GetAssociations(root);
+            IEnumerable<IRelationship> relations = extractor.GetAssociations(root);
             
             Assert.Equal(4, relations.Count());
             List<string> ends = relations.Select(rel => rel.Child).ToList();
@@ -67,6 +67,47 @@ namespace roslynqueries
             Assert.Contains("C2", ends);
             Assert.Contains("C3", ends);
             Assert.Contains("T", ends);
+        }
+
+        [Fact]
+        public void Calls()
+        {
+            string code = @"
+            class A
+            {
+                public A()
+                {
+                    _b = new B();
+                }
+                public void f()
+                {
+                    return _b.g();
+                }
+                private B _b;
+            }
+            class B
+            {
+                public void g() { }
+            }
+            ";
+            
+            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
+            var model = compilation.GetSemanticModel(tree);
+
+            var extractor = new Extractor(code, model);
+            var root = (CompilationUnitSyntax)tree.GetRoot();
+
+            List<(string, string)> calls = new List<(string, string)>();
+            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
+            foreach (MethodDeclarationSyntax methodDecl in methods) {
+                var invocations = methodDecl.DescendantNodes().OfType<InvocationExpressionSyntax>();
+                foreach (InvocationExpressionSyntax invDecl in invocations) {
+                    var caller = methodDecl.Identifier.ValueText;
+                    var callee = model.GetSymbolInfo(invDecl).Symbol.Name;
+                    calls.Add((caller, callee));
+                }
+            }
         }
 
     }
