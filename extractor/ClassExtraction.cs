@@ -1,15 +1,10 @@
-using System.Collections.Generic;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace extractor
 {
-    public class ClassExtraction : ITypeExtraction
+    public class ClassExtraction : TExtraction<ClassDeclarationSyntax>
     {
-        public string Name { get; }
-
-        public ITypeExtraction GetParent() { }
-
-        public IEnumerable<ITypeExtraction> GetFieldsAndProperties() { yield break; }
-
-        public IEnumerable<MethodExtraction> GetMethods() { yield break; }
+        public ClassExtraction(SyntaxTree tree, string name)  : base(tree, name) { }
     }
 }

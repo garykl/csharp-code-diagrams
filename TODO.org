@@ -1,0 +1,8 @@
+* class relations
+** parent, either class or interface
+** members, either fields or properties
+** TODO method return types, method argument types
+This relation can be from containing class to type, or it can connect the
+return type with the argument type!
+* struct relations?
+* interface relations

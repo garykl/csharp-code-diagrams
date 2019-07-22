@@ -1,9 +1,9 @@
+using System.Collections.Generic;
+
 namespace extractor
 {
     public interface ITypeExtraction
     {
-        string Name { get; }
-
-        ITypeExtraction GetParent();
+        IEnumerable<ITypeExtraction> GetParents();
     }
 }
