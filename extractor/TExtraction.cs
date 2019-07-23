@@ -8,8 +8,11 @@ namespace extractor
 {
     public class TExtraction<TDeclarationSyntax> : ITypeExtraction where TDeclarationSyntax : TypeDeclarationSyntax
     {
+        public string Name { get; private set; }
+
         public TExtraction(SyntaxTree tree, string name)
         {
+            Name = name;
             var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
             _tree = tree;
             _model = compilation.GetSemanticModel(tree);
@@ -57,10 +60,7 @@ namespace extractor
         {
             var methods = _node.DescendantNodes().OfType<MethodDeclarationSyntax>();
             foreach (MethodDeclarationSyntax methodDecl in methods) {
-                var invocations = methodDecl.DescendantNodes().OfType<InvocationExpressionSyntax>();
-                foreach (InvocationExpressionSyntax invDecl in invocations) {
-                    yield return new MethodExtraction(_tree, _model.GetSymbolInfo(invDecl).Symbol.Name);
-                }
+                yield return new MethodExtraction(_tree, methodDecl.Identifier.ValueText);
             }
         }
 

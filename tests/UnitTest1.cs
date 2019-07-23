@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Linq;
 using System.Collections.Generic;
 using Prototypes.RoslynAnalyzer;
+using extractor;
 
 namespace roslynqueries
 {
@@ -21,20 +22,15 @@ namespace roslynqueries
             class C : B, I, J";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(text);
-            var compilation = CSharpCompilation.Create("not an assemly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            var model = compilation.GetSemanticModel(tree);
 
-            var extractor = new Extractor(text, model);
-            var root = (CompilationUnitSyntax)tree.GetRoot();
+            ITypeExtraction c = new ClassExtraction(tree, "C");
 
-            var inheritances = extractor.GetInheritances(root).ToList();
-
-            Assert.Equal(4, inheritances.Count());
-            var cParents = inheritances.Where(inh => inh.Child == "C").Select(inh => inh.Parent).ToList();
-            Assert.Equal(3, cParents.Count());
-            Assert.Contains("B", cParents);
-            Assert.Contains("I", cParents);
-            Assert.Contains("J", cParents);
+            List<ITypeExtraction> csParents = c.GetParents().ToList();
+            Assert.Equal(3, csParents.Count());
+            ITypeExtraction b = csParents.Where(parent => parent.Name == "B").First();
+            Assert.True(b is ClassExtraction);
+            Assert.True(csParents.Where(parent => parent.Name == "I").First() is InterfaceExtraction);
+            Assert.True(csParents.Where(parent => parent.Name == "J").First() is InterfaceExtraction);
         }
 
         [Fact]
@@ -53,20 +49,17 @@ namespace roslynqueries
             }";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(text);
-            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            var model = compilation.GetSemanticModel(tree);
 
-            var extractor = new Extractor(text, model);
-            var root = (CompilationUnitSyntax)tree.GetRoot();
+            ITypeExtraction a = new ClassExtraction(tree, "A");
+            List<ITypeExtraction> fields = a.GetFieldsAndProperties().ToList();
 
-            IEnumerable<IRelationship> relations = extractor.GetAssociations(root);
-            
-            Assert.Equal(4, relations.Count());
-            List<string> ends = relations.Select(rel => rel.Child).ToList();
-            Assert.Contains("C1", ends);
-            Assert.Contains("C2", ends);
-            Assert.Contains("C3", ends);
-            Assert.Contains("T", ends);
+            ITypeExtraction c1 = fields.Find(field => field.Name == "C1");
+            ITypeExtraction c2 = fields.Find(field => field.Name == "C2");
+
+            Assert.True(c1 is ClassExtraction);
+            Assert.True(c2 is ClassExtraction);
+            Assert.Equal(2, fields.Where(field => field.Name == "C3").Count());
+            Assert.Equal(2, fields.Where(field => field.Name == "T").Count());
         }
 
         [Fact]
@@ -92,22 +85,91 @@ namespace roslynqueries
             ";
             
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
-            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            var model = compilation.GetSemanticModel(tree);
+            
+            ITypeExtraction b = new ClassExtraction(tree, "B");
+            MethodExtraction g1 = b.GetMethods().First();
+            MethodExtraction f = g1.GetCallees().First();
+            MethodExtraction g2 = f.GetCalls().First();
 
-            var extractor = new Extractor(code, model);
-            var root = (CompilationUnitSyntax)tree.GetRoot();
+            Assert.Equal("g", g1.Name);
+            Assert.Equal("f", f.Name);
+            Assert.Equal("g", g2.Name);
+        }
 
-            List<(string, string)> calls = new List<(string, string)>();
-            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-            foreach (MethodDeclarationSyntax methodDecl in methods) {
-                var invocations = methodDecl.DescendantNodes().OfType<InvocationExpressionSyntax>();
-                foreach (InvocationExpressionSyntax invDecl in invocations) {
-                    var caller = methodDecl.Identifier.ValueText;
-                    var callee = model.GetSymbolInfo(invDecl).Symbol.Name;
-                    calls.Add((caller, callee));
+        [Fact]
+        public void MethodTypes()
+        {
+            string code = @"
+                class A
+                {
+                    public B f(C c)
+                    {
+                        return new B();
+                    }
                 }
-            }
+
+                class B { }
+                struct C { }
+            ";
+
+            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+
+            var method = new MethodExtraction(tree, "f");
+
+            ITypeExtraction b = method.GetReturnTypes().First();
+            ITypeExtraction c = method.GetArgumentTypes().First();
+
+            Assert.True(b is ClassExtraction);
+            Assert.True(c is StructExtraction);
+        }
+
+        [Fact]
+        public void LocalMethodTypes()
+        {
+            string code = @"
+                class A { }
+                class B
+                {
+                    public void f()
+                    {
+                        var b = new B();
+                    }
+                }
+            ";
+
+            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+
+            var method = new MethodExtraction(tree, "f");
+            ITypeExtraction b = method.GetLocalTypes().First();
+
+            Assert.True(b is ClassExtraction);
+            Assert.Equal("B", b.Name);
+        }
+
+        [Fact]
+        public void ParameterizedMethodTypes()
+        {
+            string code = @"
+                class A<T> { }
+                class C { }
+                class B
+                {
+                    public A<C> f(A<C> a)
+                    {
+                        var a = new A<C>();
+                        return a;
+                    }
+                }
+            ";
+            
+            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+
+            var method = new MethodExtraction(tree, "f");
+            List<ITypeExtraction> returns = method.GetReturnTypes().ToList();
+            List<ITypeExtraction> arguments = method.GetArgumentTypes().ToList();
+            
+            Assert.Equal(2, returns.Count());
+            Assert.Equal(2, arguments.Count());
         }
 
     }
