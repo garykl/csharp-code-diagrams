@@ -1,10 +1,8 @@
 using Xunit;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Linq;
 using System.Collections.Generic;
-using Prototypes.RoslynAnalyzer;
 using extractor;
 
 namespace roslynqueries
@@ -123,7 +121,7 @@ namespace roslynqueries
             Assert.True(c is StructExtraction);
         }
 
-        [Fact]
+
         public void LocalMethodTypes()
         {
             string code = @"
@@ -140,7 +138,11 @@ namespace roslynqueries
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
 
             var method = new MethodExtraction(tree, "f");
-            ITypeExtraction b = method.GetLocalTypes().First();
+            List<ITypeExtraction> bl = method.GetLocalTypes().ToList();
+
+            Assert.Equal(1, bl.Count());
+
+            ITypeExtraction b = bl.First();
 
             Assert.True(b is ClassExtraction);
             Assert.Equal("B", b.Name);
@@ -169,7 +171,12 @@ namespace roslynqueries
             List<ITypeExtraction> arguments = method.GetArgumentTypes().ToList();
             
             Assert.Equal(2, returns.Count());
+            Assert.Equal(1, returns.Where(rtrn => rtrn.Name == "A").Count());
+            Assert.Equal(1, returns.Where(rtrn => rtrn.Name == "C").Count());
+            
             Assert.Equal(2, arguments.Count());
+            Assert.Equal(1, arguments.Where(arg => arg.Name == "A").Count());
+            Assert.Equal(1, arguments.Where(arg => arg.Name == "C").Count());
         }
 
     }

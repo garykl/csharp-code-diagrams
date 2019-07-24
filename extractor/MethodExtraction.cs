@@ -28,11 +28,31 @@ namespace extractor
 
         private IEnumerable<ITypeExtraction> GetSymbolExtractions(ITypeSymbol symbol)
         {
-            if (symbol.IsValueType && Has<StructDeclarationSyntax>(symbol.Name)) {
-                yield return new StructExtraction(_tree, symbol.Name);
-            } else if (symbol.IsReferenceType && Has<ClassDeclarationSyntax>(symbol.Name)) {
-                yield return new ClassExtraction(_tree, symbol.Name);
+            ITypeExtraction extraction = GetSymbolExtraction(symbol);
+            if (extraction != null) {
+                yield return extraction;
             }
+
+            if (symbol is INamedTypeSymbol namedSymbol) {
+                foreach (ITypeSymbol tSymbol in namedSymbol.TypeArguments) {
+                    ITypeExtraction tExtraction = GetSymbolExtraction(tSymbol);
+                    if (tExtraction != null) {
+                        yield return tExtraction;
+                    }
+                }
+            }
+        }
+
+        private ITypeExtraction GetSymbolExtraction(ITypeSymbol symbol)
+        {
+            if (symbol.IsValueType && Has<StructDeclarationSyntax>(symbol.Name)) {
+                return new StructExtraction(_tree, symbol.Name);
+            } else if (symbol.IsReferenceType && Has<ClassDeclarationSyntax>(symbol.Name)) {
+                return new ClassExtraction(_tree, symbol.Name);
+            } else {
+                return null;
+            }
+
         }
 
         private bool Has<TSyntax>(string name) where TSyntax : TypeDeclarationSyntax
@@ -60,7 +80,13 @@ namespace extractor
             }
         }
 
-        public IEnumerable<ITypeExtraction> GetLocalTypes() { yield break; }
+        public IEnumerable<ITypeExtraction> GetLocalTypes()
+        {
+            // complicated:
+            // - local variables
+            // - invocations return and parameters
+            yield break;
+        }
 
         public IEnumerable<MethodExtraction> GetCalls()
         {
