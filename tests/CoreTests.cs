@@ -179,6 +179,24 @@ namespace roslynqueries
             Assert.Equal(1, arguments.Where(arg => arg.Name == "C").Count());
         }
 
+        [Fact]
+        public void DoNotCrashWithUnknownTypesOfProperties()
+        {
+            string code = @"
+                class A
+                {
+                    public string Prop { get; }
+                }
+            ";
+
+            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+
+            var clss = new ClassExtraction(tree, "A");
+
+            var properties = clss.GetFieldsAndProperties();
+            Assert.Empty(properties);
+        }
+
     }
 
 

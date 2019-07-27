@@ -49,6 +49,8 @@ namespace extractor
                 return new StructExtraction(_tree, symbol.Name);
             } else if (symbol.IsReferenceType && Has<ClassDeclarationSyntax>(symbol.Name)) {
                 return new ClassExtraction(_tree, symbol.Name);
+            } else if (symbol.IsReferenceType && Has<InterfaceDeclarationSyntax>(symbol.Name)) {
+                return new InterfaceExtraction(_tree, symbol.Name);
             } else {
                 return null;
             }
@@ -73,7 +75,7 @@ namespace extractor
             var methods = _root.DescendantNodes().OfType<MethodDeclarationSyntax>();
             foreach (var method in methods) {
                 foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>()) {
-                    if (_model.GetSymbolInfo(inv).Symbol.Name == Name) {
+                    if (_model.GetSymbolInfo(inv).Symbol?.Name == Name) {
                         yield return new MethodExtraction(_tree, method.Identifier.ValueText);
                     }
                 }
@@ -92,8 +94,26 @@ namespace extractor
         {
             var invocations = _node.DescendantNodes().OfType<InvocationExpressionSyntax>();
             foreach (InvocationExpressionSyntax invDecl in invocations) {
-                yield return new MethodExtraction(_tree, _model.GetSymbolInfo(invDecl).Symbol.Name);
+                ISymbol symbol = _model.GetSymbolInfo(invDecl).Symbol;
+                if (symbol != null) {
+                    yield return new MethodExtraction(_tree, symbol.Name);
+                }
             }
+        }
+
+        public IEnumerable<ITypeExtraction> GetCalleeTypes()
+            => GetCalls().Select(method => method?.GetContainingType()).Where(type => type != null);
+
+        public IEnumerable<ITypeExtraction> GetCallerTypes()
+            => GetCallees().Select(method => method?.GetContainingType()).Where(type => type != null);
+
+        private ITypeExtraction GetContainingType()
+        {
+            SymbolInfo symbol = _model.GetSymbolInfo(_node);
+            if (symbol.Symbol?.ContainingType?.ContainingType != null) {
+                return TypeExtraction.CreateTypeExtraction(_tree, symbol.Symbol.ContainingType.Name);
+            }
+            return null;
         }
 
         private SyntaxTree _tree;

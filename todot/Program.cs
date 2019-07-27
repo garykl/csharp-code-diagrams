@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using extractor;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Prototypes.RoslynAnalyzer;
+using relations;
 
 namespace todot
 {
@@ -15,54 +15,57 @@ namespace todot
         static void Main(string[] args)
         {
             StringBuilder builder = new StringBuilder();
-            foreach (string filename in args) {
+            IEnumerable<string> files = Directory.GetFiles("../../arena/Logic").Where(filename => filename.EndsWith(".cs"));
+            foreach (string filename in files) {
                 builder.Append(File.ReadAllText(filename));
             }
             string sourceCode = builder.ToString();
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(sourceCode);
-            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            var model = compilation.GetSemanticModel(tree);
 
-            var extractor = new Extractor(sourceCode, model);
-            var root = (CompilationUnitSyntax)tree.GetRoot();
+            var relationRegistry = new RelationRegistry(tree);
 
+            string typeName = "CircularMoveEventSource";
+            List<Relation> nextNeighbors = GetNeighbors(relationRegistry, typeName);
+            IEnumerable<Relation> overnextNeighbors = nextNeighbors
+                .SelectMany(relation => new string[] { relation.From.Name, relation.To.Name })
+                .Distinct()
+                .SelectMany(name => GetNeighbors(relationRegistry, name));
 
-            List<IRelationship> relations = extractor.GetAssociations(root).ToList();
-            relations.AddRange(extractor.GetInheritances(root));
-
-            List<INode> nodes = extractor.GetClasses(root).ToList();
-            nodes.AddRange(extractor.GetStructs(root));
-            nodes.AddRange(extractor.GetInterfaces(root));
-
-            Console.WriteLine("digraph D {");
-
-            foreach (INode node in nodes) {
-                if (node is Class clss) {
-                    Console.WriteLine($"\"{clss.Name}\" [style=filled color=\"#ffff77\"]");
-                } else if (node is Interface ntrfc) {
-                    Console.WriteLine($"\"{ntrfc.Name}\" [style=filled color=\"#aaaaaa\"]");
-                } else if (node is Struct strct) {
-                    Console.WriteLine($"\"{strct.Name}\" [style=filled color=\"#ddddaa\"]");
-                }
+            Console.WriteLine("digraph d {");
+            IEnumerable<string> dotLines = overnextNeighbors.Distinct().Select(relation => RelationToDotLine(relation));
+            foreach (string line in dotLines) {
+                Console.WriteLine(line);
             }
-
-            List<string> nodeNames = nodes.Select(node => node.Name).ToList();
-            foreach (IRelationship relation in relations) {
-
-                if ((!nodeNames.Contains(relation.Parent)) || (!nodeNames.Contains(relation.Child))) { continue; }
-
-                if (relation is ImplementationRelationship implementation) {
-                    Console.WriteLine($"\"{relation.Child}\" -> \"{relation.Parent}\" [arrowhead=onormal]");
-                } else if (relation is InheritanceRelationship inheritance) {
-                    Console.WriteLine($"\"{relation.Child}\" -> \"{relation.Parent}\" [arrowhead=onormal]");
-                } else if (relation is AssociationRelationship association) {
-                    Console.WriteLine($"\"{relation.Parent}\" -> \"{relation.Child}\"");
-                }
-            }
-
-
             Console.WriteLine("}");
         }
+
+        private static List<Relation> GetNeighbors(RelationRegistry registry, string typeName)
+        {
+            List<Relation> context = new List<Relation>();
+            foreach (var relationType in Enum.GetValues(typeof(RelationType))) {
+                context.AddRange(registry.GetRelations(typeName, (RelationType)relationType).ToList());
+            }
+            return context;
+        }
+
+        private static string RelationToDotLine(Relation unbased)
+        {   Relation relation = unbased.MapToBase();
+            switch (relation.Kind)
+            {
+                case RelationType.Parents: return ToDotLine(relation, "[arrowhead=onormal]");
+                case RelationType.Children: return ToDotLine(relation, "[dir=back arrowhead=onormal]");
+                case RelationType.Referenced: return ToDotLine(relation, "[dir=back arrowhead=diamond]");
+                case RelationType.Referencing: return ToDotLine(relation, "[arrowhead=diamond]");
+                case RelationType.MethodReturns: return ToDotLine(relation, "[arrowhead=curve]");
+                case RelationType.MethodArgs: return ToDotLine(relation, "[arrowhead=icurve]");
+                case RelationType.Callers: return ToDotLine(relation, "[dir=back arrowhead=vee]");
+                case RelationType.Callees: return ToDotLine(relation, "[arrowhead=vee]");
+                default: throw new NotImplementedException($"No arrow symbol for RelationType {relation.Kind}");
+            }
+        }
+
+        private static string ToDotLine(Relation relation, string properties)
+            => $"\"{relation.From.Name}\" -> \"{relation.To.Name}\" {properties}";
     }
 }

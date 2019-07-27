@@ -6,3 +6,4 @@ This relation can be from containing class to type, or it can connect the
 return type with the argument type!
 * struct relations?
 * interface relations
+* TODO program crashes currently with extractor .cs files.

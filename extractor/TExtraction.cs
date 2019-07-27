@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -20,16 +21,24 @@ namespace extractor
             _node = _root.DescendantNodes().OfType<TDeclarationSyntax>().Where(declaration => declaration.Identifier.ValueText == name).First();
         }
 
-        public IEnumerable<ITypeExtraction> GetFieldsAndProperties()
+        public IEnumerable<ITypeExtraction> GetReferenced()
         { 
             foreach (PropertyDeclarationSyntax propDecl in _node.DescendantNodes().OfType<PropertyDeclarationSyntax>()) {
                 IPropertySymbol propSymbol = _model.GetDeclaredSymbol(propDecl);
-                yield return TypeExtraction.CreateTypeExtraction(_tree, propSymbol.Type.Name);
+                if (propSymbol != null) {
+                    ITypeExtraction extraction = TypeExtraction.CreateTypeExtraction(_tree, propSymbol.Type.Name);
+                    if (extraction != null) {
+                        yield return extraction;
+                    };
+                }
             
                 if (propDecl.Type is GenericNameSyntax typeSyntax) {
                     foreach (var tArg in typeSyntax.TypeArgumentList.Arguments) {
                         TypeInfo argSymbol = _model.GetTypeInfo(tArg);
-                        yield return TypeExtraction.CreateTypeExtraction(_tree, argSymbol.Type.Name);
+                        ITypeExtraction extraction = TypeExtraction.CreateTypeExtraction(_tree, argSymbol.Type.Name);
+                        if (extraction != null) {
+                            yield return extraction;
+                        }
                     }
                 }
             }
@@ -43,7 +52,10 @@ namespace extractor
                     // generic type parameters
                     foreach (var tArg in talSyntax.TypeArgumentList.Arguments) {
                         TypeInfo argSymbol = _model.GetTypeInfo(tArg);
-                        yield return TypeExtraction.CreateTypeExtraction(_tree, argSymbol.Type.Name);
+                        ITypeExtraction extraction = TypeExtraction.CreateTypeExtraction(_tree, argSymbol.Type.Name);
+                        if (extraction != null) {
+                            yield return extraction;
+                        }
                     }
                 }
                 else if (fieldType is IdentifierNameSyntax inSyntax) {
@@ -51,7 +63,10 @@ namespace extractor
                 }
 
                 if (childName != null) {
-                    yield return TypeExtraction.CreateTypeExtraction(_tree, childName);
+                    ITypeExtraction extraction = TypeExtraction.CreateTypeExtraction(_tree, childName);
+                    if (extraction != null) {
+                        yield return extraction;
+                    }
                 }
             }
         }
@@ -71,11 +86,40 @@ namespace extractor
                 yield return new InterfaceExtraction(_tree, interfaceSymbol.Name);
             }
 
-            string parentName = symbol.BaseType.Name;
-            if (parentName != "Object") {
-                yield return new ClassExtraction(_tree, symbol.BaseType.Name);
+            string parentName = symbol.BaseType?.Name;
+            if (parentName != null && parentName != "Object") {
+                var extraction = TypeExtraction.CreateTypeExtraction(_tree, symbol.BaseType.Name);
+                if (extraction != null) {
+                    yield return extraction;
+                }
             }
         }
+
+        public IEnumerable<ITypeExtraction> GetChildren()
+        {
+            foreach (TypeDeclarationSyntax syntax in _root.DescendantNodes().OfType<TypeDeclarationSyntax>()) {
+                var symbol = (INamedTypeSymbol) _model.GetDeclaredSymbol(syntax);
+                string name = symbol?.BaseType?.Name;
+                IEnumerable<string> interfaces = symbol.Interfaces.Select(interf => interf.Name);
+                if (name != null && (name == Name || interfaces.Contains(Name))) {
+                    yield return TypeExtraction.CreateTypeExtraction(_tree, syntax.Identifier.ValueText);
+                }
+            }
+        }
+
+        public IEnumerable<ITypeExtraction> GetReferencing()
+        {
+            var declarations = _root.DescendantNodes().OfType<TypeDeclarationSyntax>();
+            foreach (TypeDeclarationSyntax declaration in declarations) {
+                ITypeExtraction extraction = TypeExtraction.CreateTypeExtraction(_tree, declaration.Identifier.ValueText);
+                foreach (ITypeExtraction extr in extraction.GetReferenced()) {
+                    if (extr.Name == Name) {
+                        yield return extr;
+                    }
+                }
+            }
+        }
+
 
         private SyntaxTree _tree;
         private SemanticModel _model;

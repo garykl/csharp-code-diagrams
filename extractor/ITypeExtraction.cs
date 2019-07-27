@@ -10,7 +10,9 @@ namespace extractor
     public interface ITypeExtraction : INamed
     {
         IEnumerable<ITypeExtraction> GetParents();
-        IEnumerable<ITypeExtraction> GetFieldsAndProperties();
+        IEnumerable<ITypeExtraction> GetReferenced();
+        IEnumerable<ITypeExtraction> GetReferencing();
         IEnumerable<MethodExtraction> GetMethods();
+        IEnumerable<ITypeExtraction> GetChildren();
     }
 }
