@@ -59,7 +59,9 @@ namespace tests
             ";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
-            string relation = PathFinding.FindPath(new ClassExtraction(tree, "A"), new ClassExtraction(tree, "B"));
+            var registry = new DeclarationRegistry(tree);
+
+            string relation = PathFinding.FindPath(new ClassExtraction(registry, "A"), new ClassExtraction(registry, "B"));
             Assert.Equal("GetParents", relation);
         }       
     }

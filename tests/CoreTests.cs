@@ -20,8 +20,8 @@ namespace roslynqueries
             class C : B, I, J";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(text);
-
-            ITypeExtraction c = new ClassExtraction(tree, "C");
+            var registry = new DeclarationRegistry(tree);
+            ITypeExtraction c = new ClassExtraction(registry, "C");
 
             List<ITypeExtraction> csParents = c.GetParents().ToList();
             Assert.Equal(3, csParents.Count());
@@ -47,9 +47,10 @@ namespace roslynqueries
             }";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(text);
+            var registry = new DeclarationRegistry(tree);
 
-            ITypeExtraction a = new ClassExtraction(tree, "A");
-            List<ITypeExtraction> fields = a.GetFieldsAndProperties().ToList();
+            ITypeExtraction a = new ClassExtraction(registry, "A");
+            List<ITypeExtraction> fields = a.GetReferenced().ToList();
 
             ITypeExtraction c1 = fields.Find(field => field.Name == "C1");
             ITypeExtraction c2 = fields.Find(field => field.Name == "C2");
@@ -83,8 +84,9 @@ namespace roslynqueries
             ";
             
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+            var registry = new DeclarationRegistry(tree);
             
-            ITypeExtraction b = new ClassExtraction(tree, "B");
+            ITypeExtraction b = new ClassExtraction(registry, "B");
             MethodExtraction g1 = b.GetMethods().First();
             MethodExtraction f = g1.GetCallees().First();
             MethodExtraction g2 = f.GetCalls().First();
@@ -111,8 +113,9 @@ namespace roslynqueries
             ";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+            var registry = new DeclarationRegistry(tree);
 
-            var method = new MethodExtraction(tree, "f");
+            var method = new MethodExtraction(registry, "f");
 
             ITypeExtraction b = method.GetReturnTypes().First();
             ITypeExtraction c = method.GetArgumentTypes().First();
@@ -121,32 +124,6 @@ namespace roslynqueries
             Assert.True(c is StructExtraction);
         }
 
-
-        public void LocalMethodTypes()
-        {
-            string code = @"
-                class A { }
-                class B
-                {
-                    public void f()
-                    {
-                        var b = new B();
-                    }
-                }
-            ";
-
-            SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
-
-            var method = new MethodExtraction(tree, "f");
-            List<ITypeExtraction> bl = method.GetLocalTypes().ToList();
-
-            Assert.Equal(1, bl.Count());
-
-            ITypeExtraction b = bl.First();
-
-            Assert.True(b is ClassExtraction);
-            Assert.Equal("B", b.Name);
-        }
 
         [Fact]
         public void ParameterizedMethodTypes()
@@ -165,8 +142,9 @@ namespace roslynqueries
             ";
             
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+            var registry = new DeclarationRegistry(tree);
 
-            var method = new MethodExtraction(tree, "f");
+            var method = new MethodExtraction(registry, "f");
             List<ITypeExtraction> returns = method.GetReturnTypes().ToList();
             List<ITypeExtraction> arguments = method.GetArgumentTypes().ToList();
             
@@ -190,10 +168,11 @@ namespace roslynqueries
             ";
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(code);
+            var registry = new DeclarationRegistry(tree);
 
-            var clss = new ClassExtraction(tree, "A");
+            var clss = new ClassExtraction(registry, "A");
 
-            var properties = clss.GetFieldsAndProperties();
+            var properties = clss.GetReferenced();
             Assert.Empty(properties);
         }
 

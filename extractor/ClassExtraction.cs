@@ -5,6 +5,6 @@ namespace extractor
 {
     public class ClassExtraction : TExtraction<ClassDeclarationSyntax>
     {
-        public ClassExtraction(SyntaxTree tree, string name)  : base(tree, name) { }
+        public ClassExtraction(DeclarationRegistry registry, string name)  : base(registry, name) { }
     }
 }

@@ -11,8 +11,6 @@ namespace extractor
     {
         IEnumerable<ITypeExtraction> GetParents();
         IEnumerable<ITypeExtraction> GetReferenced();
-        IEnumerable<ITypeExtraction> GetReferencing();
         IEnumerable<MethodExtraction> GetMethods();
-        IEnumerable<ITypeExtraction> GetChildren();
     }
 }

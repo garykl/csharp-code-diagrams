@@ -8,6 +8,6 @@ namespace extractor
 {
     public class InterfaceExtraction : TExtraction<InterfaceDeclarationSyntax>
     {
-        public InterfaceExtraction(SyntaxTree tree, string name) : base(tree, name) { }
+        public InterfaceExtraction(DeclarationRegistry registry, string name) : base(registry, name) { }
     }
 }

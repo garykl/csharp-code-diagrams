@@ -8,18 +8,15 @@ namespace extractor
 {
     public static class TypeExtraction
     {
-        public static ITypeExtraction CreateTypeExtraction(SyntaxTree tree, string name)
+        public static ITypeExtraction CreateTypeExtraction(DeclarationRegistry registry, string name)
         {
-            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            SemanticModel model = compilation.GetSemanticModel(tree);
-            var root = (CompilationUnitSyntax)tree.GetRoot();
-            TypeDeclarationSyntax node = GetSyntax(root, name);
+            TypeDeclarationSyntax node = registry.GetIType(name);
 
             switch (node)
             {
-                case ClassDeclarationSyntax _: return new ClassExtraction(tree, name);
-                case StructDeclarationSyntax _: return new StructExtraction(tree, name);
-                case InterfaceDeclarationSyntax _: return new InterfaceExtraction(tree, name);
+                case ClassDeclarationSyntax _: return new ClassExtraction(registry, name);
+                case StructDeclarationSyntax _: return new StructExtraction(registry, name);
+                case InterfaceDeclarationSyntax _: return new InterfaceExtraction(registry, name);
                 default: return null;
             }
         }

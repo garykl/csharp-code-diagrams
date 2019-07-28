@@ -6,6 +6,6 @@ namespace extractor
 {
     public class StructExtraction : TExtraction<StructDeclarationSyntax>
     {
-        public StructExtraction(SyntaxTree tree, string name) : base(tree, name) { }
+        public StructExtraction(DeclarationRegistry registry, string name) : base(registry, name) { }
     }
 }

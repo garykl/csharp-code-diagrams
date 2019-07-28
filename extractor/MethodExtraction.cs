@@ -10,14 +10,12 @@ namespace extractor
     {
         public string Name { get; private set; }
 
-        public MethodExtraction(SyntaxTree tree, string name)
+        public MethodExtraction(DeclarationRegistry registry, string name)
         {
             Name = name;
-            var compilation = CSharpCompilation.Create("not an assembly").AddSyntaxTrees(new SyntaxTree[] { tree });
-            _tree = tree;
-            _model = compilation.GetSemanticModel(tree);
-            _root = (CompilationUnitSyntax)tree.GetRoot();
-            _node = _root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(declaration => declaration.Identifier.ValueText == name).First();
+            _model = registry.Model;
+            _registry = registry;
+            _node = _registry.GetMethod(name);
         }
 
         public IEnumerable<ITypeExtraction> GetReturnTypes()
@@ -44,21 +42,8 @@ namespace extractor
         }
 
         private ITypeExtraction GetSymbolExtraction(ITypeSymbol symbol)
-        {
-            if (symbol.IsValueType && Has<StructDeclarationSyntax>(symbol.Name)) {
-                return new StructExtraction(_tree, symbol.Name);
-            } else if (symbol.IsReferenceType && Has<ClassDeclarationSyntax>(symbol.Name)) {
-                return new ClassExtraction(_tree, symbol.Name);
-            } else if (symbol.IsReferenceType && Has<InterfaceDeclarationSyntax>(symbol.Name)) {
-                return new InterfaceExtraction(_tree, symbol.Name);
-            } else {
-                return null;
-            }
+            => TypeExtraction.CreateTypeExtraction(_registry, symbol.Name);
 
-        }
-
-        private bool Has<TSyntax>(string name) where TSyntax : TypeDeclarationSyntax
-            => _root.DescendantNodes().OfType<TSyntax>().Where(strct => strct.Identifier.ValueText == name).Count() > 0;
 
         public IEnumerable<ITypeExtraction> GetArgumentTypes()
         {
@@ -72,22 +57,15 @@ namespace extractor
 
         public IEnumerable<MethodExtraction> GetCallees()
         {
-            var methods = _root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-            foreach (var method in methods) {
-                foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>()) {
-                    if (_model.GetSymbolInfo(inv).Symbol?.Name == Name) {
-                        yield return new MethodExtraction(_tree, method.Identifier.ValueText);
-                    }
-                }
-            }
-        }
-
-        public IEnumerable<ITypeExtraction> GetLocalTypes()
-        {
-            // complicated:
-            // - local variables
-            // - invocations return and parameters
             yield break;
+            // var methods = _root.DescendantNodes().OfType<MethodDeclarationSyntax>();
+            // foreach (var method in methods) {
+            //     foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>()) {
+            //         if (_model.GetSymbolInfo(inv).Symbol?.Name == Name) {
+            //             yield return new MethodExtraction(_registry, method.Identifier.ValueText);
+            //         }
+            //     }
+            // }
         }
 
         public IEnumerable<MethodExtraction> GetCalls()
@@ -96,7 +74,7 @@ namespace extractor
             foreach (InvocationExpressionSyntax invDecl in invocations) {
                 ISymbol symbol = _model.GetSymbolInfo(invDecl).Symbol;
                 if (symbol != null) {
-                    yield return new MethodExtraction(_tree, symbol.Name);
+                    yield return new MethodExtraction(_registry, symbol.Name);
                 }
             }
         }
@@ -111,14 +89,13 @@ namespace extractor
         {
             SymbolInfo symbol = _model.GetSymbolInfo(_node);
             if (symbol.Symbol?.ContainingType?.ContainingType != null) {
-                return TypeExtraction.CreateTypeExtraction(_tree, symbol.Symbol.ContainingType.Name);
+                return TypeExtraction.CreateTypeExtraction(_registry, symbol.Symbol.ContainingType.Name);
             }
             return null;
         }
 
-        private SyntaxTree _tree;
         private SemanticModel _model;
-        private CompilationUnitSyntax _root;
+        private DeclarationRegistry _registry;
         private MethodDeclarationSyntax _node;
 
     }
