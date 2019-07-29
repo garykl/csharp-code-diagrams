@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using CommandLine;
 using extractor;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,51 +12,65 @@ using relations;
 
 namespace todot
 {
-    public enum NodeType {
-        Interface,
-        Class,
-        Struct
-    }
-    
-    struct Node
+    class Options
     {
-        public string Name { get; set; }
-        public NodeType Kind { get; set; }
+        [Option('c', "contextcenter", HelpText = "the class to which the context is searched")]
+        public string ContextCenter { get; set; }
 
-        public override bool Equals(object obj)
-        {
-            return obj is Node node &&
-                   Name == node.Name &&
-                   Kind == node.Kind;
-        }
+        [Option('r', "relation", HelpText = "relation type to be considered")]
+        public IEnumerable<string> RelationTypes { get; set; }
 
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Name, Kind);
-        }
+        [Option('i', "input", HelpText = "folder in which .cs files reside")]
+        public IEnumerable<string> InputFolders { get; set; }
+
+        [Option('o', "output", HelpText = "dot output file")]
+        public string OutputFile { get; set; }
     }
 
     class Program
     {
         static async Task Main(string[] args)
         {
+            IEnumerable<string> inputFolders = null;
+            IEnumerable<RelationType> relationTypes = null;
+            string contextcenter = null;
+
+            CommandLine.Parser.Default.ParseArguments<Options>(args)
+                .WithParsed(opts => {
+                    inputFolders = opts.InputFolders;
+                    relationTypes = opts.RelationTypes.Select(rt => {
+                        Enum.TryParse(rt, true, out RelationType rtout);
+                        return rtout;
+                    });
+                    contextcenter = opts.ContextCenter;
+                });
+
+            await DoWithOptions(contextcenter, inputFolders, relationTypes);
+        }
+
+        private static async Task DoWithOptions(
+            string contextcenter,
+            IEnumerable<string> inputFolders,
+            IEnumerable<RelationType> relationTypes)
+        {
+
+            IEnumerable<string> files = inputFolders.SelectMany(folder
+                => Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories));
+
+
             StringBuilder builder = new StringBuilder();
-            IEnumerable<string> files = Directory.EnumerateFiles(
-                "D:\\dev\\visweb_trajectory2\\development\\backend\\Storer\\TrajectoryPipe",
-                "*.cs",
-                SearchOption.AllDirectories);
             foreach (string filename in files) {
                 builder.Append(File.ReadAllText(filename));
             }
             string sourceCode = builder.ToString();
+
 
             SyntaxTree tree = SyntaxFactory.ParseSyntaxTree(sourceCode);
             var registry = new DeclarationRegistry(tree);
 
             var relationRegistry = new RelationRegistry(registry);
 
-            string typeName = "IEventListener";
-            List<Relation> overnextNeighbors = await GetOvernextNeighbors(relationRegistry, typeName);
+            List<Relation> overnextNeighbors = await GetOvernextNeighbors(relationRegistry, relationTypes.ToList(), contextcenter);
 
             IEnumerable<Node> nodes = overnextNeighbors
                 .SelectMany(relation => new Node[] {
@@ -75,14 +90,17 @@ namespace todot
             Console.WriteLine("}");
         }
 
-        private static async Task<List<Relation>> GetOvernextNeighbors(RelationRegistry relationRegistry, string typeName)
+        private static async Task<List<Relation>> GetOvernextNeighbors(
+            RelationRegistry relationRegistry,
+            List<RelationType> relationTypes,
+            string typeName)
         {
-            var nextNeighbors = GetNextNeighbors(relationRegistry, typeName);
+            var nextNeighbors = GetNextNeighbors(relationRegistry, relationTypes, typeName);
          
             var tasks = new List<Task<List<Relation>>>();
             foreach (Relation neighbor in nextNeighbors) {
-                tasks.Add(Task.Run(() => GetNextNeighbors(relationRegistry, neighbor.From.Name)));
-                tasks.Add(Task.Run(() => GetNextNeighbors(relationRegistry, neighbor.To.Name)));
+                tasks.Add(Task.Run(() => GetNextNeighbors(relationRegistry, relationTypes, neighbor.From.Name)));
+                tasks.Add(Task.Run(() => GetNextNeighbors(relationRegistry, relationTypes, neighbor.To.Name)));
             }
             return (await Task.WhenAll(tasks)).SelectMany(t => t).Distinct().ToList();
         }
@@ -98,11 +116,17 @@ namespace todot
             }
         }
 
-        private static List<Relation> GetNextNeighbors(RelationRegistry registry, string typeName)
-        {
+        private static List<Relation> GetNextNeighbors(
+            RelationRegistry registry,
+            List<RelationType> relationTypes,
+            string typeName)
+        {   
             List<Relation> context = new List<Relation>();
             foreach (var relationType in Enum.GetValues(typeof(RelationType))) {
-                context.AddRange(registry.GetRelations(typeName, (RelationType)relationType).ToList());
+                var rt = (RelationType)relationType;
+                if (relationTypes.Contains(rt)) {
+                    context.AddRange(registry.GetRelations(typeName, rt).ToList());
+                }
             }
             return context;
         }
