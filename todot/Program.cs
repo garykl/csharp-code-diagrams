@@ -40,7 +40,10 @@ namespace todot
         static async Task Main(string[] args)
         {
             StringBuilder builder = new StringBuilder();
-            IEnumerable<string> files = Directory.GetFiles("../../NLog/src/NLog").Where(filename => filename.EndsWith(".cs"));
+            IEnumerable<string> files = Directory.EnumerateFiles(
+                "D:\\dev\\visweb_trajectory2\\development\\backend\\Storer\\TrajectoryPipe",
+                "*.cs",
+                SearchOption.AllDirectories);
             foreach (string filename in files) {
                 builder.Append(File.ReadAllText(filename));
             }
@@ -51,7 +54,7 @@ namespace todot
 
             var relationRegistry = new RelationRegistry(registry);
 
-            string typeName = "LogFactory";
+            string typeName = "IEventListener";
             List<Relation> overnextNeighbors = await GetOvernextNeighbors(relationRegistry, typeName);
 
             IEnumerable<Node> nodes = overnextNeighbors
@@ -123,12 +126,12 @@ namespace todot
                 case RelationType.Children: return ToDotLine(relation, "[dir=back arrowhead=onormal]");
                 case RelationType.Referenced: return ToDotLine(relation, "[dir=back arrowhead=diamond]");
                 case RelationType.Referencing: return ToDotLine(relation, "[arrowhead=diamond]");
-                case RelationType.MethodReturns: return ToDotLine(relation, "[arrowhead=curve]");
-                case RelationType.MethodReturned: return ToDotLine(relation, "[dir=back arrowhead=curve]");
-                case RelationType.MethodArgs: return ToDotLine(relation, "[arrowhead=icurve]");
-                case RelationType.UsedAsArg: return ToDotLine(relation, "[dir=back arrowhead=icurve]");
-                case RelationType.Callers: return ToDotLine(relation, "[dir=back arrowhead=vee]");
-                case RelationType.Callees: return ToDotLine(relation, "[arrowhead=vee]");
+                case RelationType.MethodReturns: return ToDotLine(relation, "[arrowhead=vee]");
+                case RelationType.MethodReturned: return ToDotLine(relation, "[dir=back arrowhead=vee]");
+                case RelationType.MethodArgs: return ToDotLine(relation, "[arrowhead=crow]");
+                case RelationType.UsedAsArg: return ToDotLine(relation, "[dir=back arrowhead=crow]");
+                case RelationType.Callers: return ToDotLine(relation, "[dir=back arrowhead=normal]");
+                case RelationType.Callees: return ToDotLine(relation, "[arrowhead=normal]");
                 default: throw new NotImplementedException($"No arrow symbol for RelationType {relation.Kind}");
             }
         }
