@@ -11,7 +11,7 @@ namespace extractor
         public string Name { get; private set; }
 
         public MethodExtraction(DeclarationRegistry registry, string name)
-        {
+        {   
             Name = name;
             _model = registry.Model;
             _registry = registry;
@@ -57,15 +57,12 @@ namespace extractor
 
         public IEnumerable<MethodExtraction> GetCallees()
         {
-            yield break;
-            // var methods = _root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-            // foreach (var method in methods) {
-            //     foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>()) {
-            //         if (_model.GetSymbolInfo(inv).Symbol?.Name == Name) {
-            //             yield return new MethodExtraction(_registry, method.Identifier.ValueText);
-            //         }
-            //     }
-            // }
+            foreach (var method in _registry.Methods) {
+                var extraction = new MethodExtraction(_registry, method.Identifier.ValueText);
+                if (extraction.GetCalls().Where(call => call.Name == Name).Count() > 0) {
+                    yield return extraction;
+                }
+            }
         }
 
         public IEnumerable<MethodExtraction> GetCalls()
