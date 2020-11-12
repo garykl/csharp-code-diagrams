@@ -22,9 +22,6 @@ namespace todot
 
         [Option('i', "input", HelpText = "folder in which .cs files reside")]
         public IEnumerable<string> InputFolders { get; set; }
-
-        [Option('o', "output", HelpText = "dot output file")]
-        public string OutputFile { get; set; }
     }
 
     class Program
@@ -53,10 +50,8 @@ namespace todot
             IEnumerable<string> inputFolders,
             IEnumerable<RelationType> relationTypes)
         {
-
             IEnumerable<string> files = inputFolders.SelectMany(folder
                 => Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories));
-
 
             StringBuilder builder = new StringBuilder();
             foreach (string filename in files) {
@@ -70,7 +65,10 @@ namespace todot
 
             var relationRegistry = new RelationRegistry(registry);
 
-            List<Relation> overnextNeighbors = await GetOvernextNeighbors(relationRegistry, relationTypes.ToList(), contextcenter);
+            List<Relation> overnextNeighbors =
+                (await GetOvernextNeighbors(relationRegistry, relationTypes.ToList(), contextcenter)).
+                Distinct().
+                ToList();
 
             IEnumerable<Node> nodes = overnextNeighbors
                 .SelectMany(relation => new Node[] {
@@ -81,7 +79,10 @@ namespace todot
             Console.WriteLine("digraph d {");
 
             List<string> dotLines = nodes.Select(NodeToDotLine).ToList();
-            dotLines.AddRange(overnextNeighbors.Select(RelationToDotLine));
+            dotLines.AddRange(
+                overnextNeighbors.
+                    Select(RelationToDotLine).
+                    Distinct());
 
             foreach (string line in dotLines) {
                 Console.WriteLine(line);
@@ -95,8 +96,8 @@ namespace todot
             List<RelationType> relationTypes,
             string typeName)
         {
-            var nextNeighbors = GetNextNeighbors(relationRegistry, relationTypes, typeName);
-         
+            List<Relation> nextNeighbors = GetNextNeighbors(relationRegistry, relationTypes, typeName);
+
             var tasks = new List<Task<List<Relation>>>();
             foreach (Relation neighbor in nextNeighbors) {
                 tasks.Add(Task.Run(() => GetNextNeighbors(relationRegistry, relationTypes, neighbor.From.Name)));
@@ -147,22 +148,42 @@ namespace todot
             switch (relation.Kind)
             {
                 case RelationType.Parents: return ToDotLine(relation, "[arrowhead=onormal]");
-                case RelationType.Children: return ToDotLine(relation, "[dir=back arrowhead=onormal]");
-                case RelationType.Referenced: return ToDotLine(relation, "[dir=back arrowhead=diamond]");
+                case RelationType.Children: return ToDotLine(Edge.ReverseRelation(relation), "[arrowhead=onormal]");
+                case RelationType.Referenced: return ToDotLine(Edge.ReverseRelation(relation), "[arrowhead=diamond]");
                 case RelationType.Referencing: return ToDotLine(relation, "[arrowhead=diamond]");
                 case RelationType.MethodReturns: return ToDotLine(relation, "[arrowhead=vee]");
-                case RelationType.MethodReturned: return ToDotLine(relation, "[dir=back arrowhead=vee]");
+                case RelationType.MethodReturned: return ToDotLine(Edge.ReverseRelation(relation), "[arrowhead=vee]");
                 case RelationType.MethodArgs: return ToDotLine(relation, "[arrowhead=crow]");
-                case RelationType.UsedAsArg: return ToDotLine(relation, "[dir=back arrowhead=crow]");
-                case RelationType.Callers: return ToDotLine(relation, "[dir=back arrowhead=normal]");
+                case RelationType.UsedAsArg: return ToDotLine(Edge.ReverseRelation(relation), "[arrowhead=crow]");
+                case RelationType.Callers: return ToDotLine(Edge.ReverseRelation(relation), "[arrowhead=normal]");
                 case RelationType.Callees: return ToDotLine(relation, "[arrowhead=normal]");
                 default: throw new NotImplementedException($"No arrow symbol for RelationType {relation.Kind}");
             }
         }
 
-        private static string ToDotLine(Relation relation, string properties)
+        class Edge
         {
-            return $"\"{relation.From.Name}\" -> \"{relation.To.Name}\" {properties}";
+            public string From { get; }
+            public string To { get; }
+            private Edge(string from, string to)
+            {
+                From = from;
+                To = to;
+            }
+
+            public static Edge FromRelation(Relation relation)
+              => new Edge(relation.From.Name, relation.To.Name);
+
+            public static Edge ReverseRelation(Relation relation)
+              => new Edge(relation.To.Name, relation.From.Name);
+        }
+
+        private static string ToDotLine(Relation relation, string properties)
+          => ToDotLine(Edge.FromRelation(relation), properties);
+
+        private static string ToDotLine(Edge edge, string properties)
+        {
+            return $"\"{edge.From}\" -> \"{edge.To}\" {properties}";
         }
     }
 }
